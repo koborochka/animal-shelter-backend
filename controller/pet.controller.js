@@ -68,13 +68,13 @@ class petController {
             res.status(500).json({ error: 'Ошибка при добавлении питомца' });
         }*/
         try {
-            const { name, breed, gender, age, about, type, image_url } = req.body; 
+            const { name, breed, gender, age, about, type, images_url, description} = req.body; 
             
             const newPet = await pool.query(
-              `INSERT INTO pets (name, breed, gender, age, about, type, image_url, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], NOW(), NOW())
+              `INSERT INTO pets (name, breed, gender, age, about, type, images_url, description, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], $8, NOW(), NOW())
                RETURNING *`,
-              [name, breed, gender, age, about, type, image_url]
+              [name, breed, gender, age, about, type, images_url, description]
             );
         
             res.json(newPet.rows[0]);
@@ -86,11 +86,11 @@ class petController {
 
     async updatePet(req, res) {
         const { id } = req.params;
-        const { name, breed, gender, age, about, image_url, type } = req.body;
+        const { name, breed, gender, age, about, images_url, type, description } = req.body;
         try {
             const result = await pool.query(
-                'UPDATE pets SET name = $1, breed = $2, gender = $3, age = $4, about = $5, image_url = $6, type=$7 WHERE id = $8 RETURNING *',
-                [name, breed, gender, age, about, image_url, type, id]
+                'UPDATE pets SET name = $1, breed = $2, gender = $3, age = $4, about = $5, images_ulr = $6, type=$7, description = $8, WHERE id = $8 RETURNING *',
+                [name, breed, gender, age, about, images_url, type, id, description]
             );
             if (result.rows.length === 0) {
                 return res.status(404).json({ message: 'Питомец не найден' });
