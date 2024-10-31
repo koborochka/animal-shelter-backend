@@ -13,9 +13,19 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 class petController { 
     async getAllPets(req, res) {
+        const page = parseInt(req.query.page) || 1; 
+        const perPage = parseInt(req.query.perPage) || 10; 
+    
         try {
-            const result = await pool.query('SELECT * FROM pets');
-            res.json(result.rows);
+            const totalResult = await pool.query('SELECT COUNT(*) FROM pets');
+            const total = totalResult.rows[0].count; 
+    
+            const result = await pool.query('SELECT * FROM pets LIMIT $1 OFFSET $2', [perPage, (page - 1) * perPage]); 
+    
+            // Устанавливаем заголовок Content-Range
+            res.set('Content-Range', `pets ${((page - 1) * perPage)}-${((page - 1) * perPage) + result.rows.length - 1}/${total}`);
+            
+            res.json(result.rows); 
         } catch (error) {
             res.status(500).json({ message: 'Ошибка сервера', error });
         }
@@ -57,7 +67,7 @@ class petController {
             // Сохранение данных питомца в базу данных, включая массив ссылок
             const newPet = await pool.query(
                 `INSERT INTO pets (name, breed, gender, age, about, type, image_url, created_at, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], NOW(), NOW())
+                 VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], NOW(), NOW()) description добавить
                  RETURNING *`,
                 [name, breed, gender, age, about, type, imageUrls]
             );
@@ -83,15 +93,38 @@ class petController {
             res.status(500).json({ error: 'Ошибка при добавлении питомца' });
           }      
     }
-
     async updatePet(req, res) {
         const { id } = req.params;
         const { name, breed, gender, age, about, images_url, type, description } = req.body;
+
+        const fields = [];
+        const values = [];
+
+        const updateField = (field, value) => {
+            if (value) {
+                fields.push(`${field} = $${fields.length + 1}`);
+                values.push(value);
+            }
+        };
+
+        updateField('name', name);
+        updateField('breed', breed);
+        updateField('gender', gender);
+        updateField('age', age);
+        updateField('about', about);
+        updateField('images_url', images_url);
+        updateField('type', type);
+        updateField('description', description);
+
+        if (fields.length === 0) {
+            return res.status(400).json({ message: 'Нет полей для обновления' });
+        }
+
+        const query = `UPDATE pets SET ${fields.join(', ')} WHERE id = $${fields.length + 1} RETURNING *`;
+        values.push(id);
+
         try {
-            const result = await pool.query(
-                'UPDATE pets SET name = $1, breed = $2, gender = $3, age = $4, about = $5, images_ulr = $6, type=$7, description = $8, WHERE id = $8 RETURNING *',
-                [name, breed, gender, age, about, images_url, type, id, description]
-            );
+            const result = await pool.query(query, values);
             if (result.rows.length === 0) {
                 return res.status(404).json({ message: 'Питомец не найден' });
             }
@@ -99,7 +132,7 @@ class petController {
         } catch (error) {
             res.status(500).json({ message: 'Ошибка сервера', error });
         }
-    }
+    }    
 
     async deletePet(req, res) {
         const { id } = req.params;
