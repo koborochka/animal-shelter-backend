@@ -12,24 +12,65 @@ const upload = multer({ storage: multer.memoryStorage() });
 //че мне с этим делать?
 
 class petController { 
-    async getAllPets(req, res) {
-        const page = parseInt(req.query.page) || 1; 
-        const perPage = parseInt(req.query.perPage) || 10; 
-    
-        try {
-            const totalResult = await pool.query('SELECT COUNT(*) FROM pets');
-            const total = totalResult.rows[0].count; 
-    
-            const result = await pool.query('SELECT * FROM pets LIMIT $1 OFFSET $2', [perPage, (page - 1) * perPage]); 
-    
-            // Устанавливаем заголовок Content-Range
-            res.set('Content-Range', `pets ${((page - 1) * perPage)}-${((page - 1) * perPage) + result.rows.length - 1}/${total}`);
-            
-            res.json(result.rows); 
-        } catch (error) {
-            res.status(500).json({ message: 'Ошибка сервера', error });
+async getAllPets(req, res) {
+    const page = parseInt(req.query.page) || 1; 
+    const perPage = parseInt(req.query.perPage) || 10; 
+    const sort = req.query.sort || 'id'; 
+    const order = req.query.order || 'ASC'; 
+
+    const filter = req.query.filter ? JSON.parse(req.query.filter) : {}; 
+
+    try {
+        let query = 'SELECT * FROM pets';
+        let values = [];
+        let conditions = [];
+        
+        if (filter.type) {
+            values.push(filter.type);
+            conditions.push(`type = $${values.length}`);
         }
+        if (filter.gender) {
+            values.push(filter.gender);
+            conditions.push(`gender = $${values.length}`);
+        }
+        if (filter.q) {
+            values.push(`%${filter.q}%`);
+            const qCondition = `(name ILIKE $${values.length} OR breed ILIKE $${values.length} OR about ILIKE $${values.length} OR description ILIKE $${values.length})`;
+            conditions.push(qCondition);
+        }
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        // Проверка допустимых значений для сортировки и порядка
+        const validSortFields = ['id', 'age'];
+        const validOrderValues = ['ASC', 'DESC'];
+        const sortField = validSortFields.includes(sort) ? sort : 'id';  // сортировка по id по умолчанию
+        const sortOrder = validOrderValues.includes(order.toUpperCase()) ? order.toUpperCase() : 'ASC';  // порядок по возрастанию по умолчанию
+
+        // Сортировка
+        query += ` ORDER BY ${sortField} ${sortOrder}`;
+
+        // Пагинация
+        query += ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+        values.push(perPage, (page - 1) * perPage);
+
+        // Выполняем запрос
+        const result = await pool.query(query, values);
+        
+        // Запрос для получения общего количества записей
+        const totalQuery = 'SELECT COUNT(*) FROM pets' + (conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '');
+        const totalResult = await pool.query(totalQuery, values.slice(0, values.length - 2)); 
+        const total = totalResult.rows[0].count;
+
+        // Устанавливаем заголовок Content-Range
+        res.set('Content-Range', `pets ${((page - 1) * perPage)}-${((page - 1) * perPage) + result.rows.length - 1}/${total}`);
+        
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ message: 'Ошибка сервера', error });
     }
+}
 
     async getPetById(req, res) {
         const { id } = req.params;
