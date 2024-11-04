@@ -35,15 +35,14 @@ async getAllPets(req, res) {
         }
         if (filter.q) {
             values.push(`%${filter.q}%`);
-            const qCondition = `(name ILIKE $${values.length} OR breed ILIKE $${values.length} OR about ILIKE $${values.length} OR description ILIKE $${values.length})`;
-            conditions.push(qCondition);
+            conditions.push(`(name ILIKE $${values.length} OR breed ILIKE $${values.length} OR about ILIKE $${values.length} OR description ILIKE $${values.length})`);
         }
         if (conditions.length > 0) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
 
         // Проверка допустимых значений для сортировки и порядка
-        const validSortFields = ['id', 'age'];
+        const validSortFields = ['id', 'birthdate'];
         const validOrderValues = ['ASC', 'DESC'];
         const sortField = validSortFields.includes(sort) ? sort : 'id';  // сортировка по id по умолчанию
         const sortOrder = validOrderValues.includes(order.toUpperCase()) ? order.toUpperCase() : 'ASC';  // порядок по возрастанию по умолчанию
@@ -87,7 +86,7 @@ async getAllPets(req, res) {
 
     async createPet(req, res) {
         /*try {
-            const { name, breed, gender, age, about, type } = req.body;
+            const { name, breed, gender, about, type } = req.body;
             const imageFiles = req.files; // массив файлов изображений
             const imageUrls = [];
 
@@ -107,10 +106,10 @@ async getAllPets(req, res) {
 
             // Сохранение данных питомца в базу данных, включая массив ссылок
             const newPet = await pool.query(
-                `INSERT INTO pets (name, breed, gender, age, about, type, image_url, created_at, updated_at)
+                `INSERT INTO pets (name, breed, gender, about, type, image_url, created_at, updated_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], NOW(), NOW()) description добавить
                  RETURNING *`,
-                [name, breed, gender, age, about, type, imageUrls]
+                [name, breed, gender, about, type, imageUrls]
             );
 
             res.json(newPet.rows[0]);
@@ -119,51 +118,51 @@ async getAllPets(req, res) {
             res.status(500).json({ error: 'Ошибка при добавлении питомца' });
         }*/
         try {
-            const { name, breed, gender, age, about, type, images_url, description} = req.body; 
+            const { name, breed, gender, about, type, images_url, description, birthdate } = req.body; 
             
             const newPet = await pool.query(
-              `INSERT INTO pets (name, breed, gender, age, about, type, images_url, description, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7::VARCHAR[], $8, NOW(), NOW())
+              `INSERT INTO pets (name, breed, gender, about, type, images_url, description, birthdate, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6::VARCHAR[], $7, $8, NOW(), NOW())
                RETURNING *`,
-              [name, breed, gender, age, about, type, images_url, description]
+              [name, breed, gender, about, type, images_url, description, birthdate]
             );
         
             res.json(newPet.rows[0]);
-          } catch (error) {
+        } catch (error) {
             console.error(error.message);
             res.status(500).json({ error: 'Ошибка при добавлении питомца' });
-          }      
+        }          
     }
     async updatePet(req, res) {
         const { id } = req.params;
-        const { name, breed, gender, age, about, images_url, type, description } = req.body;
-
+        const { name, breed, gender, about, images_url, type, description, birthdate } = req.body;
+    
         const fields = [];
         const values = [];
-
+    
         const updateField = (field, value) => {
-            if (value) {
+            if (value !== undefined) {  // Изменение для проверки undefined
                 fields.push(`${field} = $${fields.length + 1}`);
                 values.push(value);
             }
         };
-
+    
         updateField('name', name);
         updateField('breed', breed);
         updateField('gender', gender);
-        updateField('age', age);
         updateField('about', about);
         updateField('images_url', images_url);
         updateField('type', type);
         updateField('description', description);
-
+        updateField('birthdate', birthdate); // Добавлено
+    
         if (fields.length === 0) {
             return res.status(400).json({ message: 'Нет полей для обновления' });
         }
-
+    
         const query = `UPDATE pets SET ${fields.join(', ')} WHERE id = $${fields.length + 1} RETURNING *`;
         values.push(id);
-
+    
         try {
             const result = await pool.query(query, values);
             if (result.rows.length === 0) {
