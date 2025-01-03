@@ -22,8 +22,10 @@ class petController {
 			let conditions = [];
 
 			if (filter.type) {
-				values.push(filter.type);
-				conditions.push(`type = $${values.length}`);
+				if (filter.type !== 'all'){
+					values.push(filter.type);
+					conditions.push(`type = $${values.length}`);
+				}		
 			}
 			if (filter.gender) {
 				values.push(filter.gender);
@@ -79,7 +81,7 @@ class petController {
 				}/${total}`
 			);
 
-			res.json(result.rows);
+			res.json(result.rows);		
 		} catch (error) {
 			res.status(500).json({ message: "Ошибка сервера", error });
 		}
@@ -107,6 +109,8 @@ class petController {
 				req.body;
 			const images_url = req.files;
 
+			const parseAboutFielt = (about) => about ? about.split(/<\/p>\s*<p>/).map(str => str.replace(/<\/?p>/g, '')) : [];
+
 			if (!images_url || images_url.length === 0) {
 				return res
 					.status(400)
@@ -122,16 +126,22 @@ class petController {
 						{
 							public_id: public_id,
 							folder: "pets",
+							transformation: [
+								{
+									crop: "fill",
+									gravity: "auto",
+									aspect_ratio: "37:28",
+								}
+							]
+	
 						},
 						(error, result) => {
 							if (error) reject(error);
 							else {
-								// Возвращаем объект с secure_url и public_id
 								resolve({
 									secure_url: result.secure_url,
 									public_id: result.public_id,
-									display_name: result.display_name,
-								});
+									});
 							}
 						}
 					);
@@ -142,7 +152,6 @@ class petController {
 
 			const imageUrls = await Promise.all(
 				images_url.map(async (image) => {
-					// Загружаем каждое изображение на Cloudinary и получаем объект с secure_url и public_id
 					return uploadImageBuffer(image.buffer, image.originalname);
 				})
 			);
@@ -156,7 +165,7 @@ class petController {
 					name,
 					breed,
 					gender,
-					about,
+					parseAboutFielt(about),
 					type,
 					JSON.stringify(imageUrls),
 					description,
@@ -167,15 +176,13 @@ class petController {
 			res.json(newPet.rows[0]);
 		} catch (error) {
 			console.error("Ошибка при добавлении питомца:", error.message);
-			res.status(500).json({ error: "Ошибка при добавлении питомца" });
+			res.status(500).json({ error: `Ошибка при добавлении питомца ${error.message}` });
 		}
 	}
 
 	async updatePet(req, res) {
 		const { id } = req.params;
 		const { name, breed, gender, about, images_url, type, description, birthdate } = req.body;
-
-		console.log(req.body);
 
 		const fields = [];
 		const values = [];
